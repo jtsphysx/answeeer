@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FikirBahçesi - Canlı Kelime Bulutu</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- QRCode.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  
+  <!-- Tone.js for micro-interaction sounds -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+  
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              200: '#a7f3d0',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              900: '#064e3b',
+            }
+          },
+          animation: {
+            'pop': 'pop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
+            'pulse-subtle': 'pulseSubtle 2.5s infinite ease-in-out',
+            'float': 'float 4s ease-in-out infinite',
+          },
+          keyframes: {
+            pop: {
+              '0%': { transform: 'scale(0.7) translateY(8px)', opacity: '0' },
+              '100%': { transform: 'scale(1) translateY(0)', opacity: '1' },
+            },
+            pulseSubtle: {
+              '0%, 100%': { opacity: '1', transform: 'scale(1)' },
+              '50%': { opacity: '0.92', transform: 'scale(1.02)' },
+            },
+            float: {
+              '0%, 100%': { transform: 'translateY(0px)' },
+              '50%': { transform: 'translateY(-6px)' }
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.03);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.15);
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 0, 0, 0.25);
+    }
+
+    .word-cloud-tag {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      transform-origin: center center;
+    }
+
+    .word-cloud-tag:hover {
+      transform: scale(1.08) translateY(-2px);
+      z-index: 10;
+    }
+
+    /* Grid pattern background */
+    .bg-grid-pattern {
+      background-size: 28px 28px;
+      background-image: radial-gradient(circle, rgba(16, 185, 129, 0.08) 1.5px, transparent 1.5px);
+    }
+    
+    .dark .bg-grid-pattern {
+      background-image: radial-gradient(circle, rgba(255, 255, 255, 0.07) 1.5px, transparent 1.5px);
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col font-sans selection:bg-brand-500 selection:text-white relative overflow-x-hidden">
+
+  <header class="bg-white/90 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-40 px-4 lg:px-8 py-3.5 transition-all">
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+      
+      <!-- Brand Logo & Room Badge -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-bold tracking-tight text-slate-900 leading-tight">FikirBahçesi</h1>
+            <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-brand-100 text-brand-800 border border-brand-200">Canlı Ders</span>
+          </div>
+          <p class="text-xs text-slate-500 hidden sm:block">Gerçek Zamanlı Öğrenci Katılım Paneli</p>
+        </div>
+      </div>
+
+      <!-- Center Status / Word Counter -->
+      <div class="hidden md:flex items-center gap-4 bg-slate-100/90 py-1.5 px-4 rounded-full border border-slate-200/60 text-xs font-medium text-slate-600">
+        <span class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span id="stat-total-submissions">0</span> Toplam Cevap
+        </span>
+        <span class="w-1 h-1 rounded-full bg-slate-300"></span>
+        <span class="flex items-center gap-1.5">
+          <span id="stat-unique-words">0</span> Farklı Kelime
+        </span>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-2">
+        <!-- Sound Effect Toggle -->
+        <button id="btn-toggle-sound" title="Ses Bildirimleri" class="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition flex items-center justify-center">
+          <svg id="icon-sound-on" class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+          </svg>
+          <svg id="icon-sound-off" class="w-5 h-5 text-slate-400 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path>
+          </svg>
+        </button>
+
+        <!-- Student Phone Simulator Toggle -->
+        <button id="btn-toggle-simulator" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-sm transition flex items-center gap-2">
+          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+          </svg>
+          <span>Öğrenci Telefonu</span>
+        </button>
+
+        <!-- Fullscreen Button -->
+        <button id="btn-fullscreen" title="Tam Ekran" class="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition flex items-center justify-center">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
+          </svg>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <main class="flex-1 flex flex-col max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 gap-6">
+
+    <!-- Active Question & Controls Card -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200/80 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 transition">
+      <div class="space-y-2 flex-1 w-full text-center md:text-left">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200/70">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+          <span>DERS BAŞLANGIÇ SORUSU</span>
+        </div>
+        <h2 id="display-question" class="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight leading-snug">
+          Bugünkü konumuz hakkında aklınıza ilk gelen kelime nedir?
+        </h2>
+        <p class="text-sm text-slate-500 font-medium">Öğrenciler telefonlarından barkodu okutarak fikirlerini gönderebilir.</p>
+      </div>
+
+      <!-- Quick Action Controls -->
+      <div class="flex items-center gap-2 flex-wrap justify-center">
+        <button id="btn-edit-question" class="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5 border border-slate-200">
+          <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+          </svg>
+          Soruyu Değiştir
+        </button>
+
+        <button id="btn-clear-board" class="px-4 py-2.5 rounded-xl text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-600 transition flex items-center gap-1.5 border border-rose-200/60">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+          </svg>
+          Temizle
+        </button>
+
+        <button id="btn-export-answers" class="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5 border border-slate-200">
+          <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+          </svg>
+          Listeyi İndir
+        </button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-stretch">
+      
+      <!-- Interactive Word Garden Canvas Area (9 cols) -->
+      <div class="lg:col-span-8 xl:col-span-9 bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200/80 bg-grid-pattern relative flex flex-col justify-between min-h-[460px] overflow-hidden">
+        
+        <!-- Live status bar in cloud -->
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-4 pb-2 border-b border-slate-100">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+            <span class="font-medium text-slate-600">Canlı Yanıt Bahçesi</span>
+            <span class="text-slate-400">(Kelimeye tıklayarak doğrudan oy ekleyebilirsiniz)</span>
+          </div>
+          <div class="text-slate-400 text-xs">
+            Tekrarlanan kelimeler büyür 🌿
+          </div>
+        </div>
+
+        <!-- Word Cloud Container -->
+        <div id="word-cloud-container" class="flex-1 flex flex-wrap items-center justify-center content-center gap-3 sm:gap-4 p-4 min-h-[360px] transition-all duration-500">
+          <!-- Empty State -->
+          <div id="empty-state" class="text-center py-16 px-4 max-w-md mx-auto animate-float">
+            <div class="w-20 h-20 mx-auto rounded-3xl bg-brand-50 border border-brand-200 text-brand-600 flex items-center justify-center mb-4 shadow-sm">
+              <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
+            <h3 class="text-lg font-bold text-slate-800 mb-1">Bahçe Henüz Boş</h3>
+            <p class="text-sm text-slate-500">Öğrencilerin sağdaki barkodu telefon kamerasıyla okutmasını bekleyin veya "Öğrenci Telefonu" düğmesinden cevap gönderin.</p>
+          </div>
+        </div>
+
+        <!-- Footer helper info -->
+        <div class="pt-4 mt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+          <span class="flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            Öğretmen moderasyonu: Bir kelimenin üzerindeki <strong class="text-slate-600">✕</strong> simgesine basarak istenmeyen yanıtları silebilirsiniz.
+          </span>
+          <span id="label-last-updated" class="text-slate-400 font-mono">Bekleniyor...</span>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Big QR Code for Projector Screen (3-4 cols) -->
+      <div class="lg:col-span-4 xl:col-span-3 flex flex-col gap-6">
+        
+        <!-- QR Code Stand Card -->
+        <div class="bg-gradient-to-b from-brand-800 to-slate-900 rounded-3xl p-6 text-white shadow-xl flex flex-col items-center justify-between text-center relative overflow-hidden">
+          
+          <!-- Background decoration -->
+          <div class="absolute -top-16 -right-16 w-36 h-36 bg-emerald-500/20 rounded-full blur-2xl pointer-events-none"></div>
+
+          <div class="space-y-1.5 w-full">
+            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-emerald-300 text-xs font-bold tracking-wide uppercase">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
+              </svg>
+              <span>TELEFONDAN BAĞLANIN</span>
+            </div>
+            <h3 class="text-xl font-bold tracking-tight text-white">Kameranızı Okutun</h3>
+            <p class="text-xs text-emerald-100/80">Uygulama yüklemeden hemen katılın</p>
+          </div>
+
+          <!-- Dynamic QR Container -->
+          <div class="my-5 p-3.5 bg-white rounded-2xl shadow-inner border-4 border-emerald-400/30 transition hover:scale-105 duration-300">
+            <div id="main-qrcode" class="flex items-center justify-center min-h-[170px] min-w-[170px]"></div>
+          </div>
+
+          <!-- Direct URL & Code -->
+          <div class="w-full space-y-2 text-xs">
+            <div class="bg-white/10 rounded-xl p-2.5 backdrop-blur-sm border border-white/10 flex items-center justify-between">
+              <span class="text-emerald-200">Oda Kodu:</span>
+              <span id="room-code-display" class="font-mono font-bold tracking-wider text-base text-yellow-300">BAHCE-2026</span>
+            </div>
+            
+            <button id="btn-copy-join-link" class="w-full py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold transition flex items-center justify-center gap-2 text-xs shadow-md">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path>
+              </svg>
+              <span>Bağlantıyı Kopyala</span>
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Quick Classroom Guide Card -->
+        <div class="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/80 text-xs space-y-3">
+          <h4 class="font-bold text-slate-800 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-brand-500"></span>
+            Ders İpucu (Pedagojik Kullanım)
+          </h4>
+          <ul class="space-y-2 text-slate-600 list-disc list-inside leading-relaxed">
+            <li><strong>Ön Bilgi Tespiti:</strong> Konu başlamadan önceki kavram yanılgılarını görün.</li>
+            <li><strong>Hızlı Beyin Fırtınası:</strong> Öğrenciler 20-30 saniyede fikirlerini göndersin.</li>
+            <li><strong>En Çok Konuşulanlar:</strong> Ortada en büyük beliren kelimeler üzerinden tartışmayı başlatın.</li>
+          </ul>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Slide-out Student Phone Drawer (Allows live demo testing from the same screen or projection) -->
+  <div id="phone-simulator-drawer" class="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-slate-900/40 backdrop-blur-sm shadow-2xl transition-transform duration-300 translate-x-full flex flex-col justify-end sm:justify-center p-2 sm:p-4">
+    
+    <!-- Phone Mockup Device -->
+    <div class="bg-slate-950 w-full rounded-[2.5rem] p-3 shadow-2xl border-4 border-slate-800 flex flex-col h-[90vh] max-h-[760px] relative overflow-hidden transition-all">
+      
+      <!-- Phone Notch / Island -->
+      <div class="h-6 w-full flex items-center justify-between px-6 text-slate-400 text-[11px] font-mono select-none">
+        <span>09:41</span>
+        <div class="w-20 h-4 bg-slate-900 rounded-full flex items-center justify-center">
+          <div class="w-2.5 h-2.5 rounded-full bg-slate-800 mr-2"></div>
+          <div class="w-1.5 h-1.5 rounded-full bg-slate-700"></div>
+        </div>
+        <div class="flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/></svg>
+        </div>
+      </div>
+
+      <!-- Phone Header Bar with Close -->
+      <div class="bg-white rounded-t-3xl pt-3 px-4 pb-2 border-b border-slate-100 flex items-center justify-between mt-1">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span class="text-xs font-bold text-slate-800">Öğrenci Katılım Ekranı</span>
+        </div>
+        <button id="btn-close-simulator" class="p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <!-- Phone Web App Inside View -->
+      <div class="bg-slate-50 flex-1 rounded-b-3xl p-4 overflow-y-auto flex flex-col justify-between">
+        
+        <div class="space-y-4">
+          <!-- Room banner -->
+          <div class="bg-brand-50 border border-brand-200/70 rounded-2xl p-3 text-xs text-brand-900 flex items-center justify-between">
+            <div>
+              <span class="font-semibold block">Ders Katılımı Aktif</span>
+              <span class="text-brand-700 text-[11px]" id="sim-room-label">Oda: BAHCE-2026</span>
+            </div>
+            <span class="px-2 py-0.5 rounded-lg bg-brand-600 text-white font-bold text-[10px]">Bağlı 🟢</span>
+          </div>
+
+          <!-- Active Question on Phone -->
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+            <span class="text-[10px] font-bold text-brand-600 uppercase tracking-wider block">Öğretmenin Sorusu:</span>
+            <p id="sim-question-display" class="text-sm font-bold text-slate-800 leading-snug">
+              Bugünkü konumuz hakkında aklınıza ilk gelen kelime nedir?
+            </p>
+          </div>
+
+          <!-- Input Submission Box -->
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+            <div class="flex items-center justify-between">
+              <label for="student-answer-input" class="text-xs font-bold text-slate-700">Cevabınızı / Fikrinizi Yazın:</label>
+              <span id="char-counter" class="text-[11px] font-mono text-slate-400">0/35</span>
+            </div>
+            
+            <div class="relative">
+              <input 
+                type="text" 
+                id="student-answer-input" 
+                maxlength="35"
+                placeholder="Örn: Yapay Zeka, Enerji, Merak..." 
+                class="w-full px-3.5 py-3 rounded-xl border-2 border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none text-sm font-semibold transition text-slate-800 placeholder-slate-400"
+                autocomplete="off"
+              >
+            </div>
+
+            <button 
+              id="btn-submit-answer"
+              class="w-full py-3 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-95 text-white font-bold text-sm shadow-md shadow-brand-600/30 transition flex items-center justify-center gap-2"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+              </svg>
+              <span>Tahtaya Gönder</span>
+            </button>
+            <p class="text-[11px] text-center text-slate-400">Bir veya iki kelimelik kısa fikirler daha etkilidir.</p>
+          </div>
+
+          <!-- Recently sent by this user -->
+          <div class="space-y-1.5">
+            <span class="text-[11px] font-bold text-slate-500 block px-1">Gönderdiğiniz Fikirler:</span>
+            <div id="sim-history-list" class="flex flex-wrap gap-1.5 p-2 bg-slate-100 rounded-xl min-h-[46px] items-center">
+              <span class="text-xs text-slate-400 italic">Henüz fikir göndermediniz.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Phone Bottom Bar -->
+        <div class="text-center text-[10px] text-slate-400 py-1">
+          FikirBahçesi Live Student Client
+        </div>
+
+      </div>
+
+      <!-- Phone Home Indicator Bar -->
+      <div class="h-4 flex items-center justify-center">
+        <div class="w-32 h-1 bg-slate-600 rounded-full"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Question Modal -->
+  <div id="modal-edit-question" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-4 animate-pop">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <svg class="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+          </svg>
+          Ders Sorusunu Belirleyin
+        </h3>
+        <button id="btn-close-edit-modal" class="text-slate-400 hover:text-slate-600 p-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1.5">Öğrencilere Yansıtılacak Soru:</label>
+          <textarea 
+            id="input-new-question" 
+            rows="3" 
+            class="w-full p-3.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm font-medium outline-none text-slate-800"
+            placeholder="Sorunuzu buraya yazın..."
+          ></textarea>
+        </div>
+
+        <!-- Quick Question Templates -->
+        <div>
+          <span class="text-xs font-semibold text-slate-500 block mb-1.5">Hızlı Şablonlar:</span>
+          <div class="flex flex-wrap gap-1.5">
+            <button class="tpl-btn text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 transition border border-slate-200">
+              Bugünkü konumuz hakkında ne biliyorsunuz?
+            </button>
+            <button class="tpl-btn text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 transition border border-slate-200">
+              Bu dersten en büyük beklentiniz nedir?
+            </button>
+            <button class="tpl-btn text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 transition border border-slate-200">
+              Geçen haftanın en önemli anahtar kelimesi neydi?
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 pt-2">
+          <input type="checkbox" id="check-reset-on-edit" class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4">
+          <label for="check-reset-on-edit" class="text-xs text-slate-600">Mevcut cevapları ve kelime bahçesini sıfırla</label>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+        <button id="btn-cancel-edit-modal" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Vazgeç</button>
+        <button id="btn-save-question" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-brand-600 hover:bg-brand-700 text-white shadow-md">Kaydet ve Yansıt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Clear Confirmation Modal -->
+  <div id="modal-clear-confirm" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-pop text-center">
+      <div class="w-14 h-14 mx-auto rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center">
+        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+      </div>
+      <div>
+        <h3 class="text-base font-bold text-slate-900">Kelime Bahçesini Temizle</h3>
+        <p class="text-xs text-slate-500 mt-1">Öğrencilerin gönderdiği tüm kelimeler sıfırlanacak. Bu işlem geri alınamaz.</p>
+      </div>
+      <div class="flex items-center justify-center gap-2 pt-2">
+        <button id="btn-cancel-clear" class="w-1/2 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700">İptal</button>
+        <button id="btn-confirm-clear" class="w-1/2 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-md">Evet, Temizle</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <script>
+    // State management for AnswerGarden
+    const state = {
+      question: "Bugünkü konumuz hakkında aklınıza ilk gelen kelime nedir?",
+      roomCode: "DERS-" + Math.floor(1000 + Math.random() * 9000),
+      words: {
+        // Initial friendly starter samples
+        "Merak": 4,
+        "Yapay Zeka": 7,
+        "Öğrenme": 5,
+        "Gelecek": 3,
+        "Teknoloji": 6,
+        "Algoritma": 2,
+        "Robot": 2,
+        "İnovasyon": 3
+      },
+      soundEnabled: true,
+      lastAnswerTime: Date.now()
+    };
+
+    // Color palettes for tags to look rich and organic
+    const tagColorPalettes = [
+      { bg: 'bg-emerald-500 text-white hover:bg-emerald-600', badge: 'bg-emerald-700 text-white' },
+      { bg: 'bg-teal-500 text-white hover:bg-teal-600', badge: 'bg-teal-700 text-white' },
+      { bg: 'bg-cyan-600 text-white hover:bg-cyan-700', badge: 'bg-cyan-800 text-white' },
+      { bg: 'bg-sky-500 text-white hover:bg-sky-600', badge: 'bg-sky-700 text-white' },
+      { bg: 'bg-blue-600 text-white hover:bg-blue-700', badge: 'bg-blue-800 text-white' },
+      { bg: 'bg-indigo-500 text-white hover:bg-indigo-600', badge: 'bg-indigo-700 text-white' },
+      { bg: 'bg-violet-600 text-white hover:bg-violet-700', badge: 'bg-violet-800 text-white' },
+      { bg: 'bg-amber-500 text-slate-950 hover:bg-amber-600', badge: 'bg-amber-700 text-white' },
+      { bg: 'bg-rose-500 text-white hover:bg-rose-600', badge: 'bg-rose-700 text-white' }
+    ];
+
+    // Sound synthesizer initialization using Tone.js
+    let synth = null;
+    function playChime() {
+      if (!state.soundEnabled) return;
+      try {
+        if (!synth && window.Tone) {
+          synth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: "triangle" },
+            envelope: { attack: 0.01, decay: 0.15, sustain: 0.1, release: 0.5 }
+          }).toDestination();
+          synth.volume.value = -12;
+        }
+        if (Tone.context.state !== 'running') {
+          Tone.start();
+        }
+        if (synth) {
+          const notes = ["C5", "E5", "G5", "C6"];
+          const randomNote = notes[Math.floor(Math.random() * notes.length)];
+          synth.triggerAttackRelease(randomNote, "8n");
+        }
+      } catch (e) {
+        console.warn("Audio error:", e);
+      }
+    }
+
+    // BroadcastChannel lets students in other tabs or windows update the main screen in real time
+    const broadcastChannel = new BroadcastChannel('fikirbahcesi_realtime_bus');
+    broadcastChannel.onmessage = (event) => {
+      const data = event.data;
+      if (!data) return;
+
+      if (data.type === 'NEW_ANSWER') {
+        registerAnswer(data.word, false);
+        showToast(`Yeni fikir eklendi: "${data.word}"`, 'success');
+      } else if (data.type === 'QUESTION_UPDATE') {
+        state.question = data.question;
+        updateQuestionUI();
+      } else if (data.type === 'RESET_BOARD') {
+        state.words = {};
+        renderWordCloud();
+        showToast("Kelime bahçesi sıfırlandı.", "info");
+      }
+    };
+
+    let qrInstance = null;
+    function generateQRCode() {
+      const qrContainer = document.getElementById('main-qrcode');
+      qrContainer.innerHTML = '';
+
+      // Build join URL with current location or query params
+      const baseUrl = window.location.href.split('?')[0];
+      const joinUrl = `${baseUrl}?room=${encodeURIComponent(state.roomCode)}&mode=student`;
+
+      try {
+        qrInstance = new QRCode(qrContainer, {
+          text: joinUrl,
+          width: 170,
+          height: 170,
+          colorDark: "#064e3b",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } catch (err) {
+        console.error("QR Code Error:", err);
+      }
+
+      // Update room code label
+      document.getElementById('room-code-display').textContent = state.roomCode;
+      document.getElementById('sim-room-label').textContent = `Oda: ${state.roomCode}`;
+    }
+
+    function renderWordCloud() {
+      const container = document.getElementById('word-cloud-container');
+      const emptyState = document.getElementById('empty-state');
+      
+      const wordEntries = Object.entries(state.words);
+      const totalWordsCount = wordEntries.reduce((acc, [, count]) => acc + count, 0);
+      const uniqueCount = wordEntries.length;
+
+      // Update headers and statistics
+      document.getElementById('stat-total-submissions').textContent = totalWordsCount;
+      document.getElementById('stat-unique-words').textContent = uniqueCount;
+      document.getElementById('label-last-updated').textContent = `Son güncelleme: ${new Date().toLocaleTimeString('tr-TR')}`;
+
+      if (uniqueCount === 0) {
+        container.innerHTML = '';
+        container.appendChild(emptyState);
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      container.innerHTML = '';
+
+      // Determine min and max counts for scaling
+      const counts = wordEntries.map(([, count]) => count);
+      const minCount = Math.min(...counts);
+      const maxCount = Math.max(...counts);
+
+      // Sort words by frequency (or randomized shuffle for natural look)
+      const sortedEntries = [...wordEntries].sort((a, b) => b[1] - a[1]);
+
+      sortedEntries.forEach(([word, count], index) => {
+        // Calculate dynamic font scale: from 1rem (base) to 2.8rem (very popular)
+        let scaleRatio = 0;
+        if (maxCount > minCount) {
+          scaleRatio = (count - minCount) / (maxCount - minCount);
+        }
+        
+        // Font size calculation in rem
+        const fontSizeRem = 1.0 + (scaleRatio * 1.5); // 1.0rem to 2.5rem
+        const paddingY = Math.max(0.4, 0.3 + (scaleRatio * 0.4));
+        const paddingX = Math.max(0.8, 0.6 + (scaleRatio * 0.7));
+
+        // Color selection based on hash of word to stay consistent
+        const colorPalette = tagColorPalettes[Math.abs(hashString(word)) % tagColorPalettes.length];
+
+        const wordElement = document.createElement('div');
+        wordElement.className = `word-cloud-tag group inline-flex items-center gap-2 rounded-2xl shadow-sm ${colorPalette.bg} font-bold cursor-pointer transition-all duration-300 animate-pop border border-white/20 select-none`;
+        wordElement.style.fontSize = `${fontSizeRem}rem`;
+        wordElement.style.padding = `${paddingY}rem ${paddingX}rem`;
+        wordElement.title = `Tıklayarak oy verin (${count} kez yazıldı)`;
+
+        // Word text
+        const wordText = document.createElement('span');
+        wordText.className = "tracking-tight drop-shadow-sm";
+        wordText.textContent = word;
+
+        // Count Badge
+        const countBadge = document.createElement('span');
+        countBadge.className = `text-[11px] font-mono px-2 py-0.5 rounded-full ${colorPalette.badge} shadow-inner ml-1`;
+        countBadge.textContent = count;
+
+        // Delete (Teacher moderation) button
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = "opacity-0 group-hover:opacity-100 hover:bg-black/30 rounded-full p-1 transition ml-1 text-white/90 hover:text-white";
+        deleteBtn.title = "Bu kelimeyi sil (Öğretmen)";
+        deleteBtn.innerHTML = `
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        `;
+        deleteBtn.onclick = (e) => {
+          e.stopPropagation();
+          removeWord(word);
+        };
+
+        // Click on tag directly to upvote
+        wordElement.onclick = () => {
+          registerAnswer(word, true);
+        };
+
+        wordElement.appendChild(wordText);
+        wordElement.appendChild(countBadge);
+        wordElement.appendChild(deleteBtn);
+        container.appendChild(wordElement);
+      });
+    }
+
+    // Simple hash function for consistent color mapping
+    function hashString(str) {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = (hash << 5) - hash + str.charCodeAt(i);
+        hash |= 0;
+      }
+      return hash;
+    }
+
+    function formatWord(input) {
+      if (!input) return "";
+      let clean = input.trim();
+      // Capitalize first letters according to Turkish alphabet rules
+      clean = clean.replace(/(^|\s)[a-zçğıöşü]/g, (l) => l.toLocaleUpperCase('tr-TR'));
+      return clean;
+    }
+
+    function registerAnswer(rawWord, isLocalBroadcast = true) {
+      const formatted = formatWord(rawWord);
+      if (!formatted || formatted.length < 1) return;
+
+      // Update in state
+      if (state.words[formatted]) {
+        state.words[formatted] += 1;
+      } else {
+        state.words[formatted] = 1;
+      }
+
+      state.lastAnswerTime = Date.now();
+      playChime();
+      renderWordCloud();
+
+      // Broadcast to other windows / tabs if needed
+      if (isLocalBroadcast) {
+        broadcastChannel.postMessage({
+          type: 'NEW_ANSWER',
+          word: formatted,
+          time: Date.now()
+        });
+      }
+    }
+
+    function removeWord(word) {
+      if (state.words[word]) {
+        delete state.words[word];
+        renderWordCloud();
+        showToast(`"${word}" panodan kaldırıldı.`, 'info');
+      }
+    }
+
+    function updateQuestionUI() {
+      document.getElementById('display-question').textContent = state.question;
+      document.getElementById('sim-question-display').textContent = state.question;
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      const colors = {
+        success: 'bg-emerald-600 text-white',
+        info: 'bg-slate-800 text-white',
+        warning: 'bg-amber-600 text-white',
+        danger: 'bg-rose-600 text-white'
+      };
+
+      toast.className = `px-4 py-3 rounded-2xl shadow-xl text-xs font-semibold flex items-center gap-2 transform transition-all duration-300 pointer-events-auto ${colors[type] || colors.info} animate-pop`;
+      toast.innerHTML = `
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <span>${message}</span>
+      `;
+
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px)';
+        setTimeout(() => toast.remove(), 300);
+      }, 3200);
+    }
+
+    function copyToClipboard(text) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        showToast('Bağlantı panoya kopyalandı! 📋', 'success');
+      } catch (err) {
+        showToast('Bağlantı kopyalanamadı.', 'danger');
+      }
+      document.body.removeChild(textarea);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // 1. Initial renders
+      generateQRCode();
+      renderWordCloud();
+      updateQuestionUI();
+
+      // 2. Sound Toggle
+      const soundBtn = document.getElementById('btn-toggle-sound');
+      const soundOnIcon = document.getElementById('icon-sound-on');
+      const soundOffIcon = document.getElementById('icon-sound-off');
+      soundBtn.addEventListener('click', () => {
+        state.soundEnabled = !state.soundEnabled;
+        if (state.soundEnabled) {
+          soundOnIcon.classList.remove('hidden');
+          soundOffIcon.classList.add('hidden');
+          showToast('Ses bildirimleri açıldı 🔔', 'info');
+          playChime();
+        } else {
+          soundOnIcon.classList.add('hidden');
+          soundOffIcon.classList.remove('hidden');
+          showToast('Ses bildirimleri kapatıldı 🔕', 'info');
+        }
+      });
+
+      // 3. Fullscreen Toggle
+      const fullscreenBtn = document.getElementById('btn-fullscreen');
+      fullscreenBtn.addEventListener('click', () => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch((err) => {
+            showToast('Tam ekrana geçilemedi.', 'warning');
+          });
+        } else {
+          document.exitFullscreen();
+        }
+      });
+
+      // 4. Student Simulator Drawer
+      const simDrawer = document.getElementById('phone-simulator-drawer');
+      const btnToggleSim = document.getElementById('btn-toggle-simulator');
+      const btnCloseSim = document.getElementById('btn-close-simulator');
+
+      btnToggleSim.addEventListener('click', () => {
+        simDrawer.classList.toggle('translate-x-full');
+        document.getElementById('student-answer-input').focus();
+      });
+
+      btnCloseSim.addEventListener('click', () => {
+        simDrawer.classList.add('translate-x-full');
+      });
+
+      // 5. Student Submission Form Logic inside simulator
+      const studentInput = document.getElementById('student-answer-input');
+      const btnSubmitAnswer = document.getElementById('btn-submit-answer');
+      const charCounter = document.getElementById('char-counter');
+      const simHistoryList = document.getElementById('sim-history-list');
+
+      studentInput.addEventListener('input', (e) => {
+        charCounter.textContent = `${e.target.value.length}/35`;
+      });
+
+      function handleStudentSend() {
+        const val = studentInput.value.trim();
+        if (!val) {
+          showToast('Lütfen bir kelime veya fikir yazın.', 'warning');
+          return;
+        }
+
+        registerAnswer(val, true);
+
+        // Add to local history inside phone mockup
+        if (simHistoryList.querySelector('span.italic')) {
+          simHistoryList.innerHTML = '';
+        }
+        const chip = document.createElement('span');
+        chip.className = "px-2.5 py-1 bg-brand-100 text-brand-800 rounded-lg text-xs font-bold border border-brand-200 animate-pop";
+        chip.textContent = formatWord(val);
+        simHistoryList.prepend(chip);
+
+        studentInput.value = '';
+        charCounter.textContent = '0/35';
+        studentInput.focus();
+        showToast('Fikriniz canlı bahçeye eklendi! 🌱', 'success');
+      }
+
+      btnSubmitAnswer.addEventListener('click', handleStudentSend);
+      studentInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handleStudentSend();
+        }
+      });
+
+      // 6. Copy Join Link Button
+      document.getElementById('btn-copy-join-link').addEventListener('click', () => {
+        const baseUrl = window.location.href.split('?')[0];
+        const link = `${baseUrl}?room=${encodeURIComponent(state.roomCode)}&mode=student`;
+        copyToClipboard(link);
+      });
+
+      // 7. Edit Question Modal
+      const modalEdit = document.getElementById('modal-edit-question');
+      const btnOpenEdit = document.getElementById('btn-edit-question');
+      const btnCloseEdit = document.getElementById('btn-close-edit-modal');
+      const btnCancelEdit = document.getElementById('btn-cancel-edit-modal');
+      const btnSaveQuestion = document.getElementById('btn-save-question');
+      const textareaQuestion = document.getElementById('input-new-question');
+
+      btnOpenEdit.addEventListener('click', () => {
+        textareaQuestion.value = state.question;
+        modalEdit.classList.remove('hidden');
+        textareaQuestion.focus();
+      });
+
+      function closeEditModal() {
+        modalEdit.classList.add('hidden');
+      }
+
+      btnCloseEdit.addEventListener('click', closeEditModal);
+      btnCancelEdit.addEventListener('click', closeEditModal);
+
+      // Question template buttons
+      document.querySelectorAll('.tpl-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          textareaQuestion.value = btn.textContent.trim();
+        });
+      });
+
+      btnSaveQuestion.addEventListener('click', () => {
+        const newQ = textareaQuestion.value.trim();
+        if (!newQ) {
+          showToast('Lütfen geçerli bir soru yazın.', 'warning');
+          return;
+        }
+        state.question = newQ;
+        updateQuestionUI();
+
+        // Check if user wanted to reset garden
+        if (document.getElementById('check-reset-on-edit').checked) {
+          state.words = {};
+          renderWordCloud();
+          document.getElementById('check-reset-on-edit').checked = false;
+        }
+
+        broadcastChannel.postMessage({
+          type: 'QUESTION_UPDATE',
+          question: state.question
+        });
+
+        closeEditModal();
+        showToast('Yeni soru panoya yansıtıldı! ✨', 'success');
+      });
+
+      // 8. Clear Board Modal
+      const modalClear = document.getElementById('modal-clear-confirm');
+      const btnOpenClear = document.getElementById('btn-clear-board');
+      const btnCancelClear = document.getElementById('btn-cancel-clear');
+      const btnConfirmClear = document.getElementById('btn-confirm-clear');
+
+      btnOpenClear.addEventListener('click', () => {
+        modalClear.classList.remove('hidden');
+      });
+
+      btnCancelClear.addEventListener('click', () => {
+        modalClear.classList.add('hidden');
+      });
+
+      btnConfirmClear.addEventListener('click', () => {
+        state.words = {};
+        renderWordCloud();
+        modalClear.classList.add('hidden');
+
+        broadcastChannel.postMessage({
+          type: 'RESET_BOARD'
+        });
+
+        showToast('Kelime bahçesi temizlendi.', 'info');
+      });
+
+      // 9. Export Answers to CSV / Text
+      document.getElementById('btn-export-answers').addEventListener('click', () => {
+        const entries = Object.entries(state.words);
+        if (entries.length === 0) {
+          showToast('Dışa aktarılacak kelime bulunmuyor.', 'warning');
+          return;
+        }
+
+        let csvContent = `Soru: "${state.question}"\nOda: ${state.roomCode}\nTarih: ${new Date().toLocaleString('tr-TR')}\n\nKelime,Oy Sayisi\n`;
+        entries.sort((a, b) => b[1] - a[1]).forEach(([w, c]) => {
+          csvContent += `"${w}",${c}\n`;
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `FikirBahcesi_${state.roomCode}_${Date.now()}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Sonuçlar CSV dosyası olarak indirildi! 📊', 'success');
+      });
+
+      // Check if URL has ?mode=student (Direct mobile landing view)
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('mode') === 'student') {
+        // Automatically open phone drawer or optimize for mobile device
+        simDrawer.classList.remove('translate-x-full');
+      }
+    });
+  </script>
+</body>
+</html>
