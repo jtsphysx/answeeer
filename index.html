@@ -3,764 +3,671 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FikirBahçesi - Canlı Kelime Bulutu</title>
-  
-  <!-- Tailwind CSS -->
+  <title>Canlı Fikir Bahçesi | Sınıf İçi Etkileşim</title>
+  <!-- Tailwind CSS & QR Code Kütüphanesi -->
   <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- QRCode.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  
-  <!-- Tone.js for micro-interaction sounds -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
-
-  <!-- MQTT.js for Real-Time Multi-Device Classroom Sync (Free Public Broker) -->
-  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-  
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Plus Jakarta Sans', 'sans-serif'],
-          },
-          colors: {
-            brand: {
-              50: '#ecfdf5',
-              100: '#d1fae5',
-              500: '#10b981',
-              600: '#059669',
-              700: '#047857',
-              800: '#065f46',
-              900: '#064e3b',
-            }
-          },
-          animation: {
-            'pop': 'pop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
-            'float': 'float 3.5s ease-in-out infinite',
-          },
-          keyframes: {
-            pop: {
-              '0%': { transform: 'scale(0.7) translateY(8px)', opacity: '0' },
-              '100%': { transform: 'scale(1) translateY(0)', opacity: '1' },
-            },
-            float: {
-              '0%, 100%': { transform: 'translateY(0px)' },
-              '50%': { transform: 'translateY(-6px)' }
-            }
-          }
-        }
-      }
-    }
-  </script>
-
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    .word-cloud-tag {
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      transform-origin: center center;
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    
+    .word-badge {
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      user-select: none;
     }
-    .word-cloud-tag:hover {
+    .word-badge:hover {
       transform: scale(1.08) translateY(-2px);
-      z-index: 10;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
     }
-    .bg-grid-pattern {
-      background-size: 28px 28px;
-      background-image: radial-gradient(circle, rgba(16, 185, 129, 0.09) 1.5px, transparent 1.5px);
+    .delete-btn {
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .word-badge:hover .delete-btn {
+      opacity: 1;
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.5); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .pop-in {
+      animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col font-sans selection:bg-brand-500 selection:text-white">
+<body class="bg-slate-950 text-slate-100 min-h-screen">
 
   <!-- ========================================== -->
-  <!-- 1. TEACHER / PROJECTOR SCREEN VIEW         -->
+  <!-- 1. ÖĞRENCİ GÖRÜNÜMÜ (Telefonda Açılan Arayüz) -->
   <!-- ========================================== -->
-  <div id="teacher-view" class="flex-1 flex flex-col">
-    <!-- Header -->
-    <header class="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 px-4 lg:px-8 py-3.5">
-      <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
-        
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
-            </svg>
+  <div id="studentView" class="hidden min-h-screen flex flex-col justify-between p-5 max-w-md mx-auto">
+    <div class="space-y-6">
+      <header class="text-center pt-4">
+        <span class="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold rounded-full">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          CANLI DERSE BAĞLANDI
+        </span>
+        <div class="text-xs text-slate-400 mt-2 font-mono" id="studentRoomBadge">Oda: ...</div>
+      </header>
+
+      <!-- Soru Kartı -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl text-center">
+        <div class="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-2">Öğretmenin Sorusu</div>
+        <h2 id="studentQuestion" class="text-lg font-bold text-white leading-snug">Soru yükleniyor...</h2>
+      </div>
+
+      <!-- Giriş Formu -->
+      <div class="space-y-3">
+        <label class="block text-xs font-semibold text-slate-300">Fikrinizi veya Yanıtınızı Yazın:</label>
+        <div class="relative">
+          <input 
+            type="text" 
+            id="studentInput" 
+            maxlength="35" 
+            placeholder="Örn: Yapay zekâ, Hız, Merak..." 
+            class="w-full bg-slate-900 border-2 border-slate-700 focus:border-indigo-500 rounded-xl px-4 py-3.5 text-base text-white outline-none transition placeholder-slate-500"
+          >
+          <span id="charCount" class="absolute right-3.5 top-3.5 text-xs text-slate-500">0/35</span>
+        </div>
+
+        <button 
+          id="btnStudentSubmit" 
+          class="w-full bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold py-3.5 px-6 rounded-xl transition duration-200 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30"
+        >
+          <i class="fa-solid fa-paper-plane"></i>
+          <span>Tahtaya Gönder</span>
+        </button>
+
+        <div id="studentFeedback" class="hidden text-center text-sm font-semibold p-3 rounded-xl transition duration-300"></div>
+      </div>
+    </div>
+
+    <footer class="text-center py-4 text-xs text-slate-500">
+      Birden fazla fikir gönderebilirsiniz • Katılım anonimdir
+    </footer>
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- 2. ÖĞRETMEN / TAHTA GÖRÜNÜMÜ (Büyük Ekran) -->
+  <!-- ========================================== -->
+  <div id="teacherView" class="min-h-screen flex flex-col p-4 md:p-6 lg:p-8">
+    
+    <!-- Üst Kontrol & Başlık Barı -->
+    <header class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 mb-6 backdrop-blur-md shadow-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      
+      <!-- Soru Alanı (Tıklayıp Düzenlenebilir) -->
+      <div class="flex-1 cursor-pointer group" id="btnEditQuestion" title="Soruyu değiştirmek için tıklayın">
+        <div class="flex items-center gap-2 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">
+          <i class="fa-solid fa-chalkboard-user"></i>
+          <span>Ders Başlangıç Sorusu</span>
+          <span class="text-slate-500 group-hover:text-indigo-300 text-[11px] font-normal transition">(Tıkla ve Değiştir)</span>
+        </div>
+        <h1 id="teacherQuestion" class="text-xl md:text-2xl lg:text-3xl font-extrabold text-white leading-tight flex items-center gap-3">
+          <span>Soru yükleniyor...</span>
+          <i class="fa-solid fa-pen-to-square text-sm text-slate-500 group-hover:text-white transition"></i>
+        </h1>
+      </div>
+
+      <!-- Bilgi Rozetleri & Butonlar -->
+      <div class="flex flex-wrap items-center gap-3">
+        <!-- Sabit Sınıf Kodu Rozeti -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 flex items-center gap-2.5">
+          <div class="text-left">
+            <div class="text-[10px] text-slate-400 uppercase font-semibold leading-none">Sınıf Kodu</div>
+            <div id="roomCodeDisplay" class="font-mono font-bold text-white text-base">----</div>
           </div>
-          <div>
-            <div class="flex items-center gap-2">
-              <h1 class="text-lg font-bold tracking-tight text-slate-900 leading-tight">FikirBahçesi</h1>
-              <span id="conn-status-badge" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">Bağlanıyor...</span>
-            </div>
-            <p class="text-xs text-slate-500 hidden sm:block">Canlı Sınıf Katılım ve Beyin Fırtınası Paneli</p>
-          </div>
-        </div>
-
-        <div class="hidden md:flex items-center gap-4 bg-slate-100 py-1.5 px-4 rounded-full border border-slate-200/80 text-xs font-medium text-slate-600">
-          <span class="flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span id="stat-total-submissions">0</span> Toplam Cevap
-          </span>
-          <span class="w-1 h-1 rounded-full bg-slate-300"></span>
-          <span class="flex items-center gap-1.5">
-            <span id="stat-unique-words">0</span> Farklı Fikir
-          </span>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <!-- Sound Toggle -->
-          <button id="btn-toggle-sound" title="Ses Bildirimi" class="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition">
-            <svg id="icon-sound-on" class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
-            </svg>
-            <svg id="icon-sound-off" class="w-5 h-5 text-slate-400 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path>
-            </svg>
-          </button>
-
-          <!-- Test Simulator Drawer Toggle -->
-          <button id="btn-toggle-simulator" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-sm transition flex items-center gap-2">
-            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-            </svg>
-            <span>Öğrenci Telefonu</span>
-          </button>
-
-          <!-- Fullscreen Toggle -->
-          <button id="btn-fullscreen" title="Tam Ekran" class="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
-            </svg>
+          <button id="btnCopyCode" title="Kodu Kopyala" class="text-slate-400 hover:text-white text-xs p-1">
+            <i class="fa-regular fa-copy"></i>
           </button>
         </div>
+
+        <!-- İstatistik -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2">
+          <div class="text-[10px] text-slate-400 uppercase font-semibold leading-none">Toplam Fikir</div>
+          <div id="statTotalWords" class="font-mono font-bold text-indigo-400 text-base">0</div>
+        </div>
+
+        <!-- Canlı Durum -->
+        <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-3.5 py-2 flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="text-xs font-bold text-emerald-400">Canlı Aktif</span>
+        </div>
+
+        <!-- Eylemler -->
+        <button id="btnChangeQuestionModal" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow">
+          <i class="fa-solid fa-pencil"></i>
+          <span>Soruyu Değiştir</span>
+        </button>
+
+        <button id="btnClearGarden" class="bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-semibold px-3 py-2.5 rounded-xl transition flex items-center gap-1.5">
+          <i class="fa-solid fa-trash-can"></i>
+          <span>Bahçeyi Sıfırla</span>
+        </button>
       </div>
     </header>
 
-    <!-- Main Board -->
-    <main class="flex-1 flex flex-col max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 gap-6">
-
-      <!-- Question Bar -->
-      <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200/80 flex flex-col md:flex-row items-center justify-between gap-6">
-        <div class="space-y-2 flex-1 text-center md:text-left">
-          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200/70">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-            <span>DERSİN SORUSU</span>
-          </div>
-          <h2 id="display-question" class="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight leading-snug">
-            Bugünkü konumuz hakkında aklınıza gelen ilk kelime nedir?
-          </h2>
-          <p class="text-xs sm:text-sm text-slate-500 font-medium">Öğrenciler telefonlarından sağdaki karekodu okutarak canlı fikir gönderebilir.</p>
-        </div>
-
-        <div class="flex items-center gap-2 flex-wrap justify-center">
-          <button id="btn-edit-question" class="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5 border border-slate-200">
-            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-            Soruyu Değiştir
-          </button>
-          <button id="btn-clear-board" class="px-4 py-2.5 rounded-xl text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-600 transition flex items-center gap-1.5 border border-rose-200/60">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-            Temizle
-          </button>
-          <button id="btn-export-answers" class="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5 border border-slate-200">
-            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-            İndir (CSV)
-          </button>
-        </div>
-      </div>
-
-      <!-- Cloud & QR Grid -->
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-stretch">
+    <!-- Ana Çalışma Alanı: Sol Bahçe, Sağ QR Kod -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-1">
+      
+      <!-- KELİME BULUTU (Sol 3 Kolon) -->
+      <div class="lg:col-span-3 bg-slate-900/50 border border-slate-800/80 rounded-3xl p-6 md:p-8 flex flex-col justify-center items-center relative overflow-hidden min-h-[460px] shadow-2xl">
         
-        <!-- Word Cloud Area (9 cols) -->
-        <div class="lg:col-span-8 xl:col-span-9 bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200/80 bg-grid-pattern relative flex flex-col justify-between min-h-[460px]">
-          
-          <div class="flex items-center justify-between text-xs text-slate-400 mb-4 pb-2 border-b border-slate-100">
-            <div class="flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-              <span class="font-semibold text-slate-700">Canlı Yanıt Bahçesi</span>
-              <span class="text-slate-400 hidden sm:inline">(Kelimeye tıklayarak oy verebilirsiniz)</span>
-            </div>
-            <div class="text-slate-400 text-xs">Tekrarlanan fikirler büyür 🌿</div>
+        <!-- Boş Durum Göstergesi -->
+        <div id="emptyState" class="text-center space-y-4 max-w-md py-12">
+          <div class="w-16 h-16 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center text-2xl mx-auto animate-bounce">
+            <i class="fa-solid fa-seedling"></i>
           </div>
-
-          <!-- Cloud -->
-          <div id="word-cloud-container" class="flex-1 flex flex-wrap items-center justify-center content-center gap-3 sm:gap-4 p-4 min-h-[340px] transition-all">
-            <div id="empty-state" class="text-center py-16 px-4 max-w-md mx-auto animate-float">
-              <div class="w-20 h-20 mx-auto rounded-3xl bg-brand-50 border border-brand-200 text-brand-600 flex items-center justify-center mb-4 shadow-sm">
-                <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-              </div>
-              <h3 class="text-lg font-bold text-slate-800 mb-1">Bahçe Cevap Bekliyor</h3>
-              <p class="text-sm text-slate-500">Öğrencilerin sağdaki barkodu telefon kamerasıyla okutmasını bekleyin.</p>
-            </div>
-          </div>
-
-          <div class="pt-4 mt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
-            <span>Öğretmen uyarısı: İstemediğiniz cevabı silmek için kelimenin üzerine gelip <strong>✕</strong> işaretine basın.</span>
-            <span id="label-last-updated" class="font-mono text-slate-400">Hazır</span>
-          </div>
+          <h3 class="text-xl font-bold text-slate-200">Fikir Bahçesi Henüz Boş</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Öğrenciler sağdaki karekodu telefonlarıyla okutarak fikirlerini gönderdikçe kelimeler burada canlı olarak filizlenecektir.
+          </p>
         </div>
 
-        <!-- Right Side: Projector QR Code (3 cols) -->
-        <div class="lg:col-span-4 xl:col-span-3 flex flex-col gap-6">
-          <div class="bg-gradient-to-b from-brand-800 to-slate-900 rounded-3xl p-6 text-white shadow-xl flex flex-col items-center justify-between text-center relative overflow-hidden">
-            
-            <div class="space-y-1.5 w-full">
-              <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-emerald-300 text-xs font-bold tracking-wide uppercase">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
-                <span>TELEFONDAN BAĞLANIN</span>
-              </div>
-              <h3 class="text-xl font-bold tracking-tight text-white">Kameranızı Okutun</h3>
-              <p class="text-xs text-emerald-100/80">Uygulama yüklemeden hemen katılın</p>
-            </div>
-
-            <!-- Dynamic QR Image -->
-            <div class="my-5 p-3.5 bg-white rounded-2xl shadow-inner border-4 border-emerald-400/30 transition hover:scale-105 duration-300">
-              <div id="main-qrcode" class="flex items-center justify-center min-h-[170px] min-w-[170px]"></div>
-            </div>
-
-            <div class="w-full space-y-2 text-xs">
-              <div class="bg-white/10 rounded-xl p-2.5 backdrop-blur-sm border border-white/10 flex items-center justify-between">
-                <span class="text-emerald-200">Sınıf Kodu:</span>
-                <span id="room-code-display" class="font-mono font-bold tracking-wider text-base text-yellow-300">...</span>
-              </div>
-              
-              <button id="btn-copy-join-link" class="w-full py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold transition flex items-center justify-center gap-2 text-xs shadow-md">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
-                <span>Öğrenci Bağlantısını Kopyala</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        <!-- Kelimelerin Yerleştiği Konteyner -->
+        <div id="wordContainer" class="hidden flex flex-wrap items-center justify-center gap-3.5 md:gap-5 w-full h-full p-2"></div>
 
       </div>
-    </main>
+
+      <!-- KAREKOD & KATILIM KARTI (Sağ 1 Kolon) -->
+      <div class="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col items-center justify-between text-center shadow-xl">
+        <div class="w-full space-y-2">
+          <span class="inline-block px-3 py-1 bg-indigo-500/20 text-indigo-300 text-[11px] font-bold rounded-full">
+            KATILIM KAREKODU
+          </span>
+          <h3 class="text-base font-bold text-white">Kameranızla Okutun</h3>
+          <p class="text-xs text-slate-400">Herhangi bir uygulama gerekmez</p>
+        </div>
+
+        <!-- Karekod Çerçevesi -->
+        <div class="p-3 bg-white rounded-2xl shadow-xl my-4 flex items-center justify-center">
+          <div id="qrCodeTarget"></div>
+        </div>
+
+        <div class="w-full space-y-2 text-xs">
+          <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 font-mono text-[11px] text-indigo-300 break-all" id="shortUrlDisplay">
+            Yükleniyor...
+          </div>
+          <div class="flex gap-2">
+            <button id="btnCopyLink" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded-lg font-medium transition flex items-center justify-center gap-1.5">
+              <i class="fa-regular fa-clipboard"></i>
+              <span>Linki Kopyala</span>
+            </button>
+            <button id="btnOpenStudentTest" class="bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 px-3 py-2 rounded-lg font-medium transition" title="Öğrenci Girişini Yeni Sekmede Test Et">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
   </div>
 
+
   <!-- ========================================== -->
-  <!-- 2. STUDENT DIRECT MOBILE SCREEN VIEW       -->
-  <!-- (Shown when student opens URL on phone)    -->
+  <!-- SORU DEĞİŞTİRME MODALI -->
   <!-- ========================================== -->
-  <div id="student-view" class="hidden min-h-screen bg-slate-900 flex flex-col justify-between p-4 sm:p-6 text-white max-w-md mx-auto w-full">
-    
-    <div class="space-y-5">
-      <!-- Header -->
+  <div id="questionModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5">
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-        <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-xl bg-brand-500 flex items-center justify-center font-bold text-white text-sm">🌿</div>
-          <span class="font-bold text-sm">FikirBahçesi Öğrenci Paneli</span>
-        </div>
-        <span id="student-room-badge" class="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-slate-800 text-emerald-400 border border-slate-700">Oda: ...</span>
-      </div>
-
-      <!-- Question Banner -->
-      <div class="bg-gradient-to-br from-brand-900/60 to-slate-800 p-5 rounded-3xl border border-brand-500/30 space-y-2">
-        <span class="text-[11px] font-bold tracking-wider text-emerald-400 uppercase block">Öğretmenin Sorusu:</span>
-        <h3 id="student-question-text" class="text-lg font-extrabold text-white leading-snug">
-          Yükleniyor...
+        <h3 class="font-bold text-lg text-white flex items-center gap-2">
+          <i class="fa-solid fa-pen-nib text-indigo-400"></i>
+          <span>Ders Sorusunu Güncelle</span>
         </h3>
+        <button id="btnCloseModal" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
-      <!-- Input Form -->
-      <div class="bg-slate-800/90 p-5 rounded-3xl border border-slate-700 space-y-3 shadow-xl">
-        <div class="flex items-center justify-between text-xs font-semibold text-slate-300">
-          <label for="mobile-answer-input">Fikrinizi veya Kelimenizi Yazın:</label>
-          <span id="mobile-char-count" class="font-mono text-slate-400">0/35</span>
-        </div>
-
-        <input 
-          type="text" 
-          id="mobile-answer-input"
-          maxlength="35"
-          placeholder="Örn: Yapay Zeka, Enerji, Merak..."
-          class="w-full px-4 py-3.5 rounded-2xl bg-slate-900 border-2 border-slate-600 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 text-white font-semibold text-base outline-none transition placeholder-slate-500"
-          autocomplete="off"
-        >
-
-        <button 
-          id="btn-mobile-send"
-          class="w-full py-4 rounded-2xl bg-brand-500 hover:bg-brand-600 active:scale-95 text-slate-950 font-extrabold text-base shadow-lg shadow-brand-500/20 transition flex items-center justify-center gap-2"
-        >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
-          <span>Tahtaya Gönder</span>
-        </button>
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1.5">Yeni Sorunuz:</label>
+        <textarea id="modalQuestionInput" rows="3" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm focus:border-indigo-500 outline-none"></textarea>
       </div>
 
-      <!-- Sent History -->
-      <div class="space-y-2">
-        <span class="text-xs font-bold text-slate-400 px-1">Tahtaya Gönderdiğiniz Fikirler:</span>
-        <div id="mobile-history-chips" class="flex flex-wrap gap-2 p-3 bg-slate-800/50 rounded-2xl border border-slate-800 min-h-[50px] items-center">
-          <span class="text-xs text-slate-500 italic">Henüz bir fikir göndermediniz.</span>
+      <!-- Hızlı Örnek Şablonlar -->
+      <div class="space-y-1.5">
+        <div class="text-[11px] font-semibold text-slate-400">Hızlı Şablonlar:</div>
+        <div class="flex flex-wrap gap-2 text-xs">
+          <button class="tpl-btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-lg">Bugünkü konumuz size ne çağrıştırıyor?</button>
+          <button class="tpl-btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-lg">Geçen dersten aklınızda kalan tek bir kelime?</button>
+          <button class="tpl-btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-lg">Bu dönemin en önemli kavramı nedir?</button>
         </div>
       </div>
-    </div>
 
-    <div class="text-center text-xs text-slate-500 py-3">
-      FikirBahçesi Canlı Katılım • Öğretmenin projeksiyonunu takip edin
-    </div>
-  </div>
-
-  <!-- Slide-out Student Simulator Drawer for Teacher Laptop/Smartboard -->
-  <div id="phone-simulator-drawer" class="fixed inset-y-0 right-0 z-50 w-full max-w-sm bg-slate-900/50 backdrop-blur-sm transition-transform duration-300 translate-x-full flex flex-col justify-center p-3">
-    <div class="bg-slate-950 w-full rounded-[2.5rem] p-3 shadow-2xl border-4 border-slate-800 flex flex-col h-[85vh] max-h-[700px] relative">
-      <div class="bg-white rounded-t-3xl pt-3 px-4 pb-2 border-b border-slate-100 flex items-center justify-between">
-        <span class="text-xs font-bold text-slate-800">Öğrenci Telefonu Simülatörü</span>
-        <button id="btn-close-simulator" class="text-slate-400 hover:text-slate-700 p-1">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-        </button>
+      <div class="flex items-center gap-2 pt-2">
+        <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
+          <input type="checkbox" id="modalResetWordsCheck" class="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0">
+          <span>Mevcut kelime bahçesini de sıfırla</span>
+        </label>
       </div>
-      <div class="bg-slate-50 flex-1 rounded-b-3xl p-4 overflow-y-auto space-y-4 flex flex-col justify-between">
-        <div class="space-y-3">
-          <div class="p-3 bg-brand-50 border border-brand-200 rounded-xl text-xs text-brand-900">
-            <strong>Canlı Test:</strong> Buraya yazdığınız yanıtlar gerçek bir öğrenci telefonu gibi projeksiyona anında yansır.
-          </div>
-          <input 
-            type="text" 
-            id="sim-answer-input" 
-            maxlength="35"
-            placeholder="Cevabınızı yazın..." 
-            class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold outline-none focus:border-brand-500"
-          >
-          <button 
-            id="btn-sim-send" 
-            class="w-full py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-md transition"
-          >
-            Simülatörden Gönder
-          </button>
-        </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button id="btnCancelModal" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800">İptal</button>
+        <button id="btnSaveQuestion" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500">Kaydet ve Yansıt</button>
       </div>
     </div>
   </div>
 
-  <!-- Edit Question Modal -->
-  <div id="modal-edit-question" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-pop">
-      <div class="flex items-center justify-between pb-2 border-b border-slate-100">
-        <h3 class="text-base font-bold text-slate-900">Ders Sorusunu Güncelleyin</h3>
-        <button id="btn-close-edit-modal" class="text-slate-400 hover:text-slate-600 p-1">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-        </button>
-      </div>
 
-      <div class="space-y-3">
-        <textarea 
-          id="input-new-question" 
-          rows="3" 
-          class="w-full p-3.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 text-sm font-medium outline-none text-slate-800"
-          placeholder="Yeni sorunuzu buraya yazın..."
-        ></textarea>
-
-        <div class="flex items-center gap-2 pt-1">
-          <input type="checkbox" id="check-reset-on-edit" class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4">
-          <label for="check-reset-on-edit" class="text-xs text-slate-600">Önceki kelimeleri ve oyları temizle</label>
-        </div>
-      </div>
-
-      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-        <button id="btn-cancel-edit-modal" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Vazgeç</button>
-        <button id="btn-save-question" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-brand-600 hover:bg-brand-700 text-white shadow-md">Kaydet ve Yayınla</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Toast Notification Container -->
-  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
-
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT: MOTOR, HAFIZA VE CANLI SENKRON -->
+  <!-- ========================================== -->
   <script>
-    // URL Parameters
+    // --- 1. SABİT ODA VE KİMLİK YÖNETİMİ ---
     const urlParams = new URLSearchParams(window.location.search);
-    const mode = urlParams.get('mode') || 'teacher';
+    const isStudent = urlParams.get('role') === 'student';
     
-    // Consistent room generation or retrieval from URL
-    let currentRoom = urlParams.get('room');
-    if (!currentRoom) {
-      currentRoom = "DERS-" + Math.floor(1000 + Math.random() * 9000);
+    // Sınıf Kodu: URL'den al -> Yoksa localStorage'dan al -> Hiç yoksa 1 kez kalıcı üret
+    let roomCode = urlParams.get('room');
+    if (!roomCode) {
+      roomCode = localStorage.getItem('ag_saved_room_code');
+      if (!roomCode) {
+        // Rastgele 5 haneli akılda kalıcı sınıf kodu üret
+        roomCode = 'S' + Math.floor(1000 + Math.random() * 9000);
+      }
+      localStorage.setItem('ag_saved_room_code', roomCode);
+      
+      // Hoca sayfayı F5 yaptığında kodun kaybolmaması için URL'ye yaz
+      if (!isStudent) {
+        const newUrl = window.location.pathname + '?room=' + roomCode;
+        window.history.replaceState({ path: newUrl }, '', newUrl);
+      }
+    } else {
+      localStorage.setItem('ag_saved_room_code', roomCode);
     }
 
-    const state = {
-      room: currentRoom,
-      question: "Bugünkü konumuz hakkında aklınıza gelen ilk kelime nedir?",
-      words: {
-        "Merak": 3,
-        "Gelecek": 4,
-        "Yapay Zeka": 6,
-        "Teknoloji": 5,
-        "Öğrenme": 2
-      },
-      soundEnabled: true
-    };
+    // İletişim Kanalı (ntfy.sh HTTPS Port 443 + Yerel BroadcastChannel)
+    const CHANNEL_TOPIC = 'ag_board_' + roomCode.toLowerCase();
+    const localBroadcast = ('BroadcastChannel' in window) ? new BroadcastChannel(CHANNEL_TOPIC) : null;
 
-    // Color Palettes for Words
-    const tagPalettes = [
-      { bg: 'bg-emerald-500 text-white hover:bg-emerald-600', badge: 'bg-emerald-700 text-white' },
-      { bg: 'bg-teal-500 text-white hover:bg-teal-600', badge: 'bg-teal-700 text-white' },
-      { bg: 'bg-cyan-600 text-white hover:bg-cyan-700', badge: 'bg-cyan-800 text-white' },
-      { bg: 'bg-sky-500 text-white hover:bg-sky-600', badge: 'bg-sky-700 text-white' },
-      { bg: 'bg-blue-600 text-white hover:bg-blue-700', badge: 'bg-blue-800 text-white' },
-      { bg: 'bg-indigo-500 text-white hover:bg-indigo-600', badge: 'bg-indigo-700 text-white' },
-      { bg: 'bg-violet-600 text-white hover:bg-violet-700', badge: 'bg-violet-800 text-white' },
-      { bg: 'bg-rose-500 text-white hover:bg-rose-600', badge: 'bg-rose-700 text-white' }
+    // Renk Paleti (Farklı kelimeler için canlı gradyanlar)
+    const COLOR_PALETTES = [
+      'from-indigo-500 to-purple-600 text-white',
+      'from-emerald-400 to-teal-600 text-slate-950 font-bold',
+      'from-amber-400 to-orange-500 text-slate-950 font-bold',
+      'from-pink-500 to-rose-600 text-white',
+      'from-cyan-400 to-blue-600 text-slate-950 font-bold',
+      'from-fuchsia-500 to-violet-600 text-white'
     ];
 
-    // Sound effect with Tone.js
-    let synth = null;
+    // Web Audio API ile Hafif Bildirim Zil Sesi (Dış dosya gerektirmez)
     function playChime() {
-      if (!state.soundEnabled || mode === 'student') return;
       try {
-        if (!synth && window.Tone) {
-          synth = new Tone.PolySynth(Tone.Synth, {
-            oscillator: { type: "triangle" },
-            envelope: { attack: 0.01, decay: 0.15, sustain: 0.1, release: 0.4 }
-          }).toDestination();
-          synth.volume.value = -12;
-        }
-        if (Tone.context && Tone.context.state !== 'running') {
-          Tone.start();
-        }
-        if (synth) {
-          const notes = ["C5", "E5", "G5", "C6"];
-          synth.triggerAttackRelease(notes[Math.floor(Math.random() * notes.length)], "8n");
-        }
-      } catch (e) {
-        console.warn(e);
-      }
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15); // A5
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.4);
+      } catch (e) {}
     }
 
-    // MQTT REAL-TIME BROKER SETUP
-    // Uses free public secure WebSocket broker (EMQX) - Zero backend setup required
-    const mqttTopic = `fikirbahcesi/room/${state.room}`;
-    const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
-      clientId: 'fb_' + Math.random().toString(16).substr(2, 8),
-      clean: true,
-      connectTimeout: 4000,
-      reconnectPeriod: 2000
-    });
 
-    client.on('connect', () => {
-      console.log('Connected to Classroom MQTT Broker');
-      const badge = document.getElementById('conn-status-badge');
-      if (badge) {
-        badge.textContent = "Canlı Bağlantı Aktif 🟢";
-        badge.className = "px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200";
-      }
-      client.subscribe(mqttTopic);
+    // ========================================================
+    // ÖĞRENCİ MODU ÇALIŞMA MANTIĞI
+    // ========================================================
+    if (isStudent) {
+      document.getElementById('teacherView').classList.add('hidden');
+      document.getElementById('studentView').classList.remove('hidden');
 
-      // If teacher connects, broadcast the question so any already-opened student phones sync
-      if (mode === 'teacher') {
-        publishMessage({ type: 'QUESTION_SYNC', question: state.question });
-      }
-    });
+      const studentRoomBadge = document.getElementById('studentRoomBadge');
+      const studentQuestion = document.getElementById('studentQuestion');
+      const studentInput = document.getElementById('studentInput');
+      const charCount = document.getElementById('charCount');
+      const btnStudentSubmit = document.getElementById('btnStudentSubmit');
+      const studentFeedback = document.getElementById('studentFeedback');
 
-    client.on('message', (topic, payload) => {
-      try {
-        const msg = JSON.parse(payload.toString());
-        if (!msg || !msg.type) return;
+      studentRoomBadge.innerText = 'Sınıf Kodu: ' + roomCode;
 
-        if (msg.type === 'NEW_ANSWER') {
-          addWordLocally(msg.word);
-          if (mode === 'teacher') {
-            showToast(`Yeni fikir eklendi: "${msg.word}"`, 'success');
-          }
-        } else if (msg.type === 'QUESTION_SYNC') {
-          state.question = msg.question;
-          updateQuestionTexts();
-        } else if (msg.type === 'RESET') {
-          state.words = {};
-          renderCloud();
-          if (mode === 'teacher') showToast("Kelime bahçesi sıfırlandı.", "info");
-        }
-      } catch (err) {
-        console.error("MQTT parse error:", err);
-      }
-    });
+      // Son soruyu çek
+      const savedQ = localStorage.getItem('ag_question_' + roomCode) || "Bugünkü dersten beklentiniz veya aklınıza gelen ilk fikir nedir?";
+      studentQuestion.innerText = savedQ;
 
-    function publishMessage(data) {
-      if (client && client.connected) {
-        client.publish(mqttTopic, JSON.stringify(data));
-      }
-    }
-
-    function formatWord(txt) {
-      if (!txt) return "";
-      let clean = txt.trim();
-      return clean.replace(/(^|\s)[a-zçğıöşü]/g, (l) => l.toLocaleUpperCase('tr-TR'));
-    }
-
-    function addWordLocally(word) {
-      const clean = formatWord(word);
-      if (!clean) return;
-
-      state.words[clean] = (state.words[clean] || 0) + 1;
-      playChime();
-      renderCloud();
-    }
-
-    function removeWord(w) {
-      if (state.words[w]) {
-        delete state.words[w];
-        renderCloud();
-        showToast(`"${w}" panodan kaldırıldı.`, 'info');
-      }
-    }
-
-    function updateQuestionTexts() {
-      const tq = document.getElementById('display-question');
-      if (tq) tq.textContent = state.question;
-      const sq = document.getElementById('student-question-text');
-      if (sq) sq.textContent = state.question;
-    }
-
-    function renderCloud() {
-      if (mode !== 'teacher') return;
-      const container = document.getElementById('word-cloud-container');
-      const emptyState = document.getElementById('empty-state');
-      if (!container) return;
-
-      const entries = Object.entries(state.words);
-      const totalWords = entries.reduce((a, [, c]) => a + c, 0);
-      const uniqueCount = entries.length;
-
-      document.getElementById('stat-total-submissions').textContent = totalWords;
-      document.getElementById('stat-unique-words').textContent = uniqueCount;
-      document.getElementById('label-last-updated').textContent = `Son Yanıt: ${new Date().toLocaleTimeString('tr-TR')}`;
-
-      if (uniqueCount === 0) {
-        container.innerHTML = '';
-        container.appendChild(emptyState);
-        emptyState.classList.remove('hidden');
-        return;
-      }
-
-      emptyState.classList.add('hidden');
-      container.innerHTML = '';
-
-      const counts = entries.map(([, c]) => c);
-      const minC = Math.min(...counts);
-      const maxC = Math.max(...counts);
-
-      entries.sort((a, b) => b[1] - a[1]).forEach(([w, count]) => {
-        let scale = maxC > minC ? (count - minC) / (maxC - minC) : 0;
-        const fontRem = 1.0 + (scale * 1.5);
-        const padY = Math.max(0.4, 0.3 + (scale * 0.4));
-        const padX = Math.max(0.8, 0.6 + (scale * 0.7));
-
-        let hash = 0;
-        for (let i = 0; i < w.length; i++) hash = (hash << 5) - hash + w.charCodeAt(i);
-        const palette = tagPalettes[Math.abs(hash) % tagPalettes.length];
-
-        const el = document.createElement('div');
-        el.className = `word-cloud-tag group inline-flex items-center gap-2 rounded-2xl shadow-sm ${palette.bg} font-bold cursor-pointer transition-all duration-300 animate-pop border border-white/20 select-none`;
-        el.style.fontSize = `${fontRem}rem`;
-        el.style.padding = `${padY}rem ${padX}rem`;
-        el.title = `Oy verin (${count} kez yazıldı)`;
-
-        el.innerHTML = `
-          <span class="tracking-tight drop-shadow-sm">${w}</span>
-          <span class="text-[11px] font-mono px-2 py-0.5 rounded-full ${palette.badge} shadow-inner ml-1">${count}</span>
-          <button class="opacity-0 group-hover:opacity-100 hover:bg-black/30 rounded-full p-1 transition ml-1 text-white/90" title="Kelimeyi Sil">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
-          </button>
-        `;
-
-        el.querySelector('button').onclick = (e) => {
-          e.stopPropagation();
-          removeWord(w);
-        };
-
-        el.onclick = () => {
-          publishMessage({ type: 'NEW_ANSWER', word: w });
-          addWordLocally(w);
-        };
-
-        container.appendChild(el);
+      // Karakter Sayacı
+      studentInput.addEventListener('input', () => {
+        charCount.innerText = `${studentInput.value.length}/35`;
       });
-    }
 
-    function showToast(msg, type = 'info') {
-      const container = document.getElementById('toast-container');
-      if (!container) return;
-      const t = document.createElement('div');
-      const colors = {
-        success: 'bg-emerald-600 text-white',
-        info: 'bg-slate-800 text-white',
-        warning: 'bg-amber-600 text-white'
-      };
-      t.className = `px-4 py-3 rounded-2xl shadow-xl text-xs font-semibold flex items-center gap-2 transition-all ${colors[type] || colors.info} animate-pop pointer-events-auto`;
-      t.innerHTML = `<span>${msg}</span>`;
-      container.appendChild(t);
-      setTimeout(() => {
-        t.style.opacity = '0';
-        setTimeout(() => t.remove(), 300);
-      }, 3000);
-    }
+      // Enter tuşu ile gönderim
+      studentInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') btnStudentSubmit.click();
+      });
 
-    function initQR() {
-      const qrEl = document.getElementById('main-qrcode');
-      if (!qrEl) return;
-      qrEl.innerHTML = '';
+      // Gönder Butonu Tıklaması
+      btnStudentSubmit.addEventListener('click', async () => {
+        const text = studentInput.value.trim();
+        if (!text) {
+          studentInput.focus();
+          return;
+        }
 
-      const fullJoinUrl = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(state.room)}&mode=student`;
+        btnStudentSubmit.disabled = true;
+        btnStudentSubmit.classList.add('opacity-70');
+        btnStudentSubmit.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i><span>İletiliyor...</span>`;
 
-      new QRCode(qrEl, {
-        text: fullJoinUrl,
+        const payload = JSON.stringify({
+          action: 'NEW_WORD',
+          word: text,
+          time: Date.now()
+        });
+
+        // 1. ntfy.sh üzerinden HTTPS (Port 443) ile ilet
+        let success = false;
+        try {
+          const resp = await fetch(`https://ntfy.sh/${CHANNEL_TOPIC}`, {
+            method: 'POST',
+            body: payload,
+            headers: { 'Title': 'NewWord' }
+          });
+          if (resp.ok) success = true;
+        } catch (err) {
+          console.warn('Sunucu iletimi denendi:', err);
+        }
+
+        // 2. Aynı cihazdaysa BroadcastChannel ile de bildir
+        if (localBroadcast) {
+          localBroadcast.postMessage(JSON.parse(payload));
+          success = true;
+        }
+
+        // Öğrenciye Gerçek Geri Bildirim Ver
+        playChime();
+        studentFeedback.classList.remove('hidden', 'bg-rose-500/20', 'text-rose-300', 'bg-emerald-500/20', 'text-emerald-300');
+        
+        if (success) {
+          studentFeedback.classList.add('bg-emerald-500/20', 'text-emerald-300');
+          studentFeedback.innerHTML = `<i class="fa-solid fa-circle-check mr-1.5"></i> Fikriniz tahtaya yansıtıldı!`;
+          studentInput.value = '';
+          charCount.innerText = '0/35';
+        } else {
+          studentFeedback.classList.add('bg-rose-500/20', 'text-rose-300');
+          studentFeedback.innerHTML = `<i class="fa-solid fa-circle-exclamation mr-1.5"></i> İletilemedi, lütfen tekrar deneyin.`;
+        }
+
+        btnStudentSubmit.disabled = false;
+        btnStudentSubmit.classList.remove('opacity-70');
+        btnStudentSubmit.innerHTML = `<i class="fa-solid fa-paper-plane"></i><span>Tahtaya Gönder</span>`;
+
+        setTimeout(() => {
+          studentFeedback.classList.add('hidden');
+        }, 3500);
+      });
+
+      // Öğretmen soruyu değiştirirse öğrencinin ekranında da anında değişsin
+      if ('EventSource' in window) {
+        const es = new EventSource(`https://ntfy.sh/${CHANNEL_TOPIC}/sse`);
+        es.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            const msg = (typeof data.message === 'string') ? JSON.parse(data.message) : data.message;
+            if (msg && msg.action === 'UPDATE_QUESTION') {
+              studentQuestion.innerText = msg.question;
+            }
+          } catch(e) {}
+        };
+      }
+
+
+    // ========================================================
+    // ÖĞRETMEN / TAHTA MODU ÇALIŞMA MANTIĞI
+    // ========================================================
+    } else {
+      
+      // DOM Elemanları
+      const teacherQuestion = document.getElementById('teacherQuestion');
+      const roomCodeDisplay = document.getElementById('roomCodeDisplay');
+      const statTotalWords = document.getElementById('statTotalWords');
+      const wordContainer = document.getElementById('wordContainer');
+      const emptyState = document.getElementById('emptyState');
+      const qrCodeTarget = document.getElementById('qrCodeTarget');
+      const shortUrlDisplay = document.getElementById('shortUrlDisplay');
+      const btnCopyCode = document.getElementById('btnCopyCode');
+      const btnCopyLink = document.getElementById('btnCopyLink');
+      const btnOpenStudentTest = document.getElementById('btnOpenStudentTest');
+      const btnClearGarden = document.getElementById('btnClearGarden');
+      
+      // Modal Elemanları
+      const questionModal = document.getElementById('questionModal');
+      const btnEditQuestion = document.getElementById('btnEditQuestion');
+      const btnChangeQuestionModal = document.getElementById('btnChangeQuestionModal');
+      const btnCloseModal = document.getElementById('btnCloseModal');
+      const btnCancelModal = document.getElementById('btnCancelModal');
+      const btnSaveQuestion = document.getElementById('btnSaveQuestion');
+      const modalQuestionInput = document.getElementById('modalQuestionInput');
+      const modalResetWordsCheck = document.getElementById('modalResetWordsCheck');
+
+      // 1. SORU VE KELİME VERİLERİNİ YÜKLE (Sayfa yenilense de kalır)
+      let currentQuestion = localStorage.getItem('ag_question_' + roomCode) || "Bugünkü dersten beklentiniz veya aklınıza gelen ilk fikir nedir?";
+      teacherQuestion.querySelector('span').innerText = currentQuestion;
+      roomCodeDisplay.innerText = roomCode;
+
+      // Kelimeleri yükle
+      let wordsState = {};
+      try {
+        const storedWords = localStorage.getItem('ag_words_' + roomCode);
+        if (storedWords) wordsState = JSON.parse(storedWords);
+      } catch (e) {
+        wordsState = {};
+      }
+
+      // 2. KAREKOD OLUŞTURMA
+      const studentUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}&role=student`;
+      shortUrlDisplay.innerText = studentUrl;
+
+      new QRCode(qrCodeTarget, {
+        text: studentUrl,
         width: 170,
         height: 170,
-        colorDark: "#064e3b",
+        colorDark: "#0f172a",
         colorLight: "#ffffff",
         correctLevel: QRCode.CorrectLevel.M
       });
 
-      document.getElementById('room-code-display').textContent = state.room;
-    }
+      // 3. KELİME BULUTUNU EKRANA ÇİZME
+      function renderCloud() {
+        const items = Object.values(wordsState);
+        const totalCount = items.reduce((acc, cur) => acc + cur.count, 0);
+        statTotalWords.innerText = totalCount;
 
-    document.addEventListener('DOMContentLoaded', () => {
-      // Branch views: Student phone vs Projector screen
-      if (mode === 'student') {
-        document.getElementById('teacher-view').classList.add('hidden');
-        document.getElementById('student-view').classList.remove('hidden');
-        document.getElementById('student-room-badge').textContent = `Oda: ${state.room}`;
-        updateQuestionTexts();
-
-        // Student Phone Handlers
-        const mobileInput = document.getElementById('mobile-answer-input');
-        const btnSend = document.getElementById('btn-mobile-send');
-        const charCount = document.getElementById('mobile-char-count');
-        const historyContainer = document.getElementById('mobile-history-chips');
-
-        mobileInput.addEventListener('input', (e) => {
-          charCount.textContent = `${e.target.value.length}/35`;
-        });
-
-        function sendStudentIdea() {
-          const val = mobileInput.value.trim();
-          if (!val) return;
-
-          publishMessage({ type: 'NEW_ANSWER', word: val });
-
-          if (historyContainer.querySelector('span.italic')) {
-            historyContainer.innerHTML = '';
-          }
-          const chip = document.createElement('span');
-          chip.className = "px-3 py-1 bg-brand-500/20 text-emerald-300 rounded-xl text-xs font-bold border border-brand-500/40 animate-pop";
-          chip.textContent = formatWord(val);
-          historyContainer.prepend(chip);
-
-          mobileInput.value = '';
-          charCount.textContent = '0/35';
-          showToast('Fikriniz tahtaya gönderildi! 🚀', 'success');
+        if (items.length === 0) {
+          emptyState.classList.remove('hidden');
+          wordContainer.classList.add('hidden');
+          wordContainer.innerHTML = '';
+          return;
         }
 
-        btnSend.addEventListener('click', sendStudentIdea);
-        mobileInput.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') sendStudentIdea();
-        });
+        emptyState.classList.add('hidden');
+        wordContainer.classList.remove('hidden');
+        wordContainer.innerHTML = '';
 
-      } else {
-        // Teacher View Initializations
-        initQR();
-        renderCloud();
-        updateQuestionTexts();
+        // En çok yazılanları en büyük yapacak frekans hesabı
+        const maxCount = Math.max(...items.map(i => i.count), 1);
 
-        // Sound Toggle
-        document.getElementById('btn-toggle-sound').addEventListener('click', () => {
-          state.soundEnabled = !state.soundEnabled;
-          document.getElementById('icon-sound-on').classList.toggle('hidden', !state.soundEnabled);
-          document.getElementById('icon-sound-off').classList.toggle('hidden', state.soundEnabled);
-          if (state.soundEnabled) playChime();
-        });
+        // Rastgele/Estetik sıralama için karıştır
+        const sorted = [...items].sort((a, b) => b.count - a.count);
 
-        // Fullscreen
-        document.getElementById('btn-fullscreen').addEventListener('click', () => {
-          if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(() => {});
-          } else {
-            document.exitFullscreen();
-          }
-        });
+        sorted.forEach((item, index) => {
+          // Frekansa göre punto ölçekleme (1rem ile 3rem arası)
+          const weight = item.count / maxCount;
+          const fontSize = 1.05 + (weight * 1.55); // rem
+          const paddingY = 0.35 + (weight * 0.35); // rem
+          const paddingX = 0.8 + (weight * 0.6); // rem
+          
+          // Renk seçimi
+          const colorClass = COLOR_PALETTES[Math.abs(hashCode(item.text)) % COLOR_PALETTES.length];
 
-        // Copy Student Link
-        document.getElementById('btn-copy-join-link').addEventListener('click', () => {
-          const joinUrl = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(state.room)}&mode=student`;
-          navigator.clipboard.writeText(joinUrl).then(() => {
-            showToast('Öğrenci katılım linki kopyalandı! 📋', 'success');
+          const badge = document.createElement('div');
+          badge.className = `word-badge bg-gradient-to-r ${colorClass} rounded-2xl shadow-lg cursor-default pop-in group`;
+          badge.style.fontSize = `${fontSize}rem`;
+          badge.style.padding = `${paddingY}rem ${paddingX}rem`;
+
+          badge.innerHTML = `
+            <span class="tracking-tight">${escapeHtml(item.text)}</span>
+            ${item.count > 1 ? `<span class="bg-black/25 text-white text-[0.65em] px-2 py-0.5 rounded-full font-mono">${item.count}</span>` : ''}
+            <button title="Bu kelimeyi sil" class="delete-btn text-white/80 hover:text-white ml-1 text-[0.65em] p-0.5 transition">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          `;
+
+          // Kelimeyi tekil silme (Öğretmen Moderasyonu)
+          badge.querySelector('.delete-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteWord(item.key);
           });
-        });
 
-        // Simulator Drawer
-        const drawer = document.getElementById('phone-simulator-drawer');
-        document.getElementById('btn-toggle-simulator').addEventListener('click', () => {
-          drawer.classList.toggle('translate-x-full');
-        });
-        document.getElementById('btn-close-simulator').addEventListener('click', () => {
-          drawer.classList.add('translate-x-full');
-        });
-
-        // Simulator Send
-        const simInput = document.getElementById('sim-answer-input');
-        const btnSimSend = document.getElementById('btn-sim-send');
-        function sendSim() {
-          const v = simInput.value.trim();
-          if (!v) return;
-          publishMessage({ type: 'NEW_ANSWER', word: v });
-          addWordLocally(v);
-          simInput.value = '';
-          showToast('Simülatörden eklendi! 🌱', 'success');
-        }
-        btnSimSend.addEventListener('click', sendSim);
-        simInput.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') sendSim();
-        });
-
-        // Edit Question Modal
-        const editModal = document.getElementById('modal-edit-question');
-        const txtQuestion = document.getElementById('input-new-question');
-        document.getElementById('btn-edit-question').addEventListener('click', () => {
-          txtQuestion.value = state.question;
-          editModal.classList.remove('hidden');
-        });
-        document.getElementById('btn-close-edit-modal').addEventListener('click', () => editModal.classList.add('hidden'));
-        document.getElementById('btn-cancel-edit-modal').addEventListener('click', () => editModal.classList.add('hidden'));
-        document.getElementById('btn-save-question').addEventListener('click', () => {
-          const nq = txtQuestion.value.trim();
-          if (!nq) return;
-          state.question = nq;
-          updateQuestionTexts();
-          if (document.getElementById('check-reset-on-edit').checked) {
-            state.words = {};
-            renderCloud();
-            publishMessage({ type: 'RESET' });
-          }
-          publishMessage({ type: 'QUESTION_SYNC', question: state.question });
-          editModal.classList.add('hidden');
-          showToast('Soru güncellendi ve telefonlara yansıtıldı! ✨', 'success');
-        });
-
-        // Clear Board
-        document.getElementById('btn-clear-board').addEventListener('click', () => {
-          if (confirm('Tüm kelimeleri temizlemek istediğinize emin misiniz?')) {
-            state.words = {};
-            renderCloud();
-            publishMessage({ type: 'RESET' });
-            showToast('Bahçe temizlendi.', 'info');
-          }
-        });
-
-        // Export CSV
-        document.getElementById('btn-export-answers').addEventListener('click', () => {
-          const entries = Object.entries(state.words);
-          let csv = `Soru: "${state.question}"\nOda: ${state.room}\n\nKelime,Frekans\n`;
-          entries.forEach(([w, c]) => { csv += `"${w}",${c}\n`; });
-          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = `FikirBahcesi_${state.room}.csv`;
-          a.click();
+          wordContainer.appendChild(badge);
         });
       }
-    });
+
+      // Kelime ekleme / güncelleme
+      function addWord(text) {
+        const clean = text.trim();
+        if (!clean) return;
+        const key = clean.toLocaleLowerCase('tr-TR');
+
+        if (wordsState[key]) {
+          wordsState[key].count += 1;
+        } else {
+          wordsState[key] = {
+            key: key,
+            text: clean,
+            count: 1
+          };
+        }
+
+        // Kalıcı kaydet ve çiz
+        localStorage.setItem('ag_words_' + roomCode, JSON.stringify(wordsState));
+        renderCloud();
+        playChime();
+      }
+
+      // Kelime silme
+      function deleteWord(key) {
+        if (wordsState[key]) {
+          delete wordsState[key];
+          localStorage.setItem('ag_words_' + roomCode, JSON.stringify(wordsState));
+          renderCloud();
+        }
+      }
+
+      // 4. CANLI BAĞLANTIYI DİNLE (HTTPS Port 443 SSE + BroadcastChannel)
+      if ('EventSource' in window) {
+        const eventSource = new EventSource(`https://ntfy.sh/${CHANNEL_TOPIC}/sse`);
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            const msg = (typeof data.message === 'string') ? JSON.parse(data.message) : data.message;
+            if (msg && msg.action === 'NEW_WORD' && msg.word) {
+              addWord(msg.word);
+            }
+          } catch(e) {}
+        };
+      }
+
+      if (localBroadcast) {
+        localBroadcast.onmessage = (e) => {
+          if (e.data && e.data.action === 'NEW_WORD' && e.data.word) {
+            addWord(e.data.word);
+          }
+        };
+      }
+
+      // 5. ETKİLEŞİM & BUTONLAR
+      btnCopyCode.addEventListener('click', () => {
+        navigator.clipboard.writeText(roomCode);
+        alert(`Sınıf Kodu (${roomCode}) kopyalandı!`);
+      });
+
+      btnCopyLink.addEventListener('click', () => {
+        navigator.clipboard.writeText(studentUrl);
+        alert('Öğrenci katılım linki kopyalandı!');
+      });
+
+      btnOpenStudentTest.addEventListener('click', () => {
+        window.open(studentUrl, '_blank');
+      });
+
+      // Bahçeyi Sıfırla
+      btnClearGarden.addEventListener('click', () => {
+        if (confirm("Mevcut kelime bahçesini tamamen sıfırlamak istediğinize emin misiniz?")) {
+          wordsState = {};
+          localStorage.removeItem('ag_words_' + roomCode);
+          renderCloud();
+        }
+      });
+
+      // Soru Değiştirme Modalı
+      function openQuestionModal() {
+        modalQuestionInput.value = currentQuestion;
+        modalResetWordsCheck.checked = false;
+        questionModal.classList.remove('hidden');
+        modalQuestionInput.focus();
+      }
+
+      btnEditQuestion.addEventListener('click', openQuestionModal);
+      btnChangeQuestionModal.addEventListener('click', openQuestionModal);
+      btnCloseModal.addEventListener('click', () => questionModal.classList.add('hidden'));
+      btnCancelModal.addEventListener('click', () => questionModal.classList.add('hidden'));
+
+      // Şablon butonları
+      document.querySelectorAll('.tpl-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          modalQuestionInput.value = btn.innerText;
+        });
+      });
+
+      // Soruyu Kaydet
+      btnSaveQuestion.addEventListener('click', () => {
+        const newQ = modalQuestionInput.value.trim();
+        if (!newQ) return;
+
+        currentQuestion = newQ;
+        localStorage.setItem('ag_question_' + roomCode, currentQuestion);
+        teacherQuestion.querySelector('span').innerText = currentQuestion;
+
+        if (modalResetWordsCheck.checked) {
+          wordsState = {};
+          localStorage.removeItem('ag_words_' + roomCode);
+        }
+
+        renderCloud();
+        questionModal.classList.add('hidden');
+
+        // Öğrencilere de yeni soruyu duyur
+        const updatePayload = JSON.stringify({ action: 'UPDATE_QUESTION', question: currentQuestion });
+        fetch(`https://ntfy.sh/${CHANNEL_TOPIC}`, { method: 'POST', body: updatePayload });
+        if (localBroadcast) localBroadcast.postMessage(JSON.parse(updatePayload));
+      });
+
+      // İlk Çizimi Yap
+      renderCloud();
+    }
+
+    // Yardımcı Araçlar
+    function hashCode(str) {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+      }
+      return hash;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
   </script>
 </body>
 </html>
